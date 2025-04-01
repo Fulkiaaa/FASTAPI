@@ -5,27 +5,32 @@ from enum import Enum
 import re
 from utils.auth import get_password_hash, get_current_user, check_admin_role, UserInDB
 
+# Création d'un routeur pour les utilisateurs
 router = APIRouter(
-    prefix="/users",
-    tags=["users"],
-    responses={404: {"description": "Utilisateur non trouvé"}}
+    prefix="/users",  # Préfixe pour toutes les routes d'utilisateur
+    tags=["users"],  # Tag pour regrouper les routes dans la documentation
+    responses={404: {"description": "Utilisateur non trouvé"}}  # Réponse par défaut pour 404
 )
 
-# Données fictives
+# Liste fictive pour stocker les utilisateurs
 users = []
 
+# Enumération pour les rôles des utilisateurs
 class RoleEnum(str, Enum):
     ADMIN = "admin"
     MEMBRE = "membre"
 
+# Modèle de base pour les utilisateurs
 class UserBase(BaseModel):
     nom: str
     email: EmailStr
-    role: RoleEnum = RoleEnum.MEMBRE
+    role: RoleEnum = RoleEnum.MEMBRE  # Rôle par défaut : membre
 
+# Modèle pour la création d'un utilisateur
 class UserCreate(UserBase):
     mot_de_passe: str
 
+    # Validation du mot de passe
     @field_validator('mot_de_passe')
     def validate_password(cls, v):
         if len(v) < 8:
@@ -36,6 +41,7 @@ class UserCreate(UserBase):
             raise ValueError("Le mot de passe doit contenir au moins un chiffre")
         return v
     
+    # Exemple pour la documentation
     class Config:
         schema_extra = {
             "example": {
@@ -46,12 +52,14 @@ class UserCreate(UserBase):
             }
         }
 
+# Modèle pour représenter un utilisateur (sans mot de passe)
 class User(UserBase):
     id: int
 
     class Config:
-        orm_mode = True
+        orm_mode = True  # Permet de travailler avec des objets ORM
 
+# Route pour créer un utilisateur
 @router.post("/", response_model=User, status_code=status.HTTP_201_CREATED)
 async def create_user(user: UserCreate):
     # Vérifier si l'email existe déjà
@@ -59,9 +67,10 @@ async def create_user(user: UserCreate):
         if existing_user["email"] == user.email:
             raise HTTPException(status_code=400, detail="Email déjà utilisé")
     
+    # Générer un nouvel ID
     new_id = max([u["id"] for u in users]) + 1 if users else 1
     
-    # Créer le nouvel utilisateur avec mot de passe haché
+    # Créer le nouvel utilisateur avec un mot de passe haché
     hashed_password = get_password_hash(user.mot_de_passe)
     new_user = {
         "id": new_id,
@@ -80,6 +89,7 @@ async def create_user(user: UserCreate):
         role=new_user["role"]
     )
 
+# Route pour récupérer tous les utilisateurs (admin uniquement)
 @router.get("/", response_model=List[User])
 async def get_users(current_user: UserInDB = Depends(check_admin_role)):
     # Seuls les administrateurs peuvent voir tous les utilisateurs
@@ -90,6 +100,7 @@ async def get_users(current_user: UserInDB = Depends(check_admin_role)):
         role=user["role"]
     ) for user in users]
 
+# Route pour récupérer les informations de l'utilisateur connecté
 @router.get("/me", response_model=User)
 async def read_users_me(current_user: UserInDB = Depends(get_current_user)):
     return User(
@@ -99,6 +110,7 @@ async def read_users_me(current_user: UserInDB = Depends(get_current_user)):
         role=current_user.role
     )
 
+# Route pour récupérer un utilisateur par ID
 @router.get("/{user_id}", response_model=User)
 async def get_user(user_id: int, current_user: UserInDB = Depends(get_current_user)):
     # Vérifier que l'utilisateur demande ses propres infos ou est admin
